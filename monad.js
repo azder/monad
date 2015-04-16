@@ -1,116 +1,78 @@
-// monad.js
-// Douglas Crockford
-// 2013-05-18
+// monad.js by Douglas Crockford 2013-05-18
 
-// Public Domain
+// Forked and modified by azder on 2015-04-12
 
 // The MONAD function is a macroid that produces monad constructor functions.
 // It can take an optional modifier function, which is a function that is
 // allowed to modify new monads at the end of the construction processes.
 
 // A monad constructor (sometimes called 'unit' or 'return' in some mythologies)
-// comes with three methods, lift, lift_value, and method, all of which can add
+// comes with three methods, lift, vlift, and method, all of which can add
 // methods and properties to the monad's prototype.
 
 // A monad has a 'bind' method that takes a function that receives a value and
 // is usually expected to return a monad.
 
-//    var identity = MONAD();
-//    var monad = identity("Hello world.");
-//    monad.bind(alert);
 
-//    var ajax = MONAD()
-//        .lift('alert', alert);
-//    var monad = ajax("Hello world.");
-//    monad.alert();
+module.exports = function MONAD(init) {
 
-//    var maybe = MONAD(function (monad, value) {
-//        if (value === null || value === undefined) {
-//            monad.is_null = true;
-//            monad.bind = function () {
-//                return monad;
-//            };
-//            return null;
-//        }
-//        return value;
-//    });
-//    var monad = maybe(null);
-//    monad.bind(alert);    // Nothing happens.
-
-function MONAD(modifier) {
     'use strict';
 
-// Each unit constructor has a monad prototype. The prototype will contain an
-// is_monad property for classification, as well as all inheritable methods.
+    // Each unit constructor has a monad prototype. The prototype will contain a
+    // monadic property for classification, as well as all inheritable methods.
 
     var prototype = Object.create(null);
-    prototype.is_monad = true;
+    prototype.monadic = true;
 
-// Each call to MONAD will produce a new unit constructor function.
+    // the Monad (unit) constructor function returned by MONAD
+    function Monad(value) {
 
-    function unit(value) {
-
-// Construct a new monad.
-
+        // Construct a new monad.
         var monad = Object.create(prototype);
 
-// In some mythologies 'bind' is called 'pipe' or '>>='.
-// The bind method will deliver the unit's value parameter to a function.
-
-        monad.bind = function (func, args) {
-
-// bind takes a function and an optional array of arguments. It calls that
-// function passing the monad's value and bind's optional array of args.
-
-// With ES6, this horrible return statement can be replaced with
-
-//          return func(value, ...args);
-
-            return func.apply(
-                undefined,
-                [value].concat(Array.prototype.slice.apply(args || []))
-            );
+        // in some mythologies it is called 'bind', 'pipe' or '>>='.
+        monad.bind = function (fn, args) {
+            // return fn(value, ...args);
+            monad.pipe(fn, args);
+            return value;
         };
 
-// If MONAD's modifier parameter is a function, then call it, passing the monad
-// and the value.
+        monad.pipe = function (fn, args) {
+            value = fn.apply(undefined, [value].concat(args || []));
+            return monad;
+        };
 
-        if (typeof modifier === 'function') {
-            value = modifier(monad, value);
+        // If MONAD's `init` is a function, it should be called to initialize/modify the monad and/or value.
+        if ('function' === typeof init) {
+            value = init(monad, value);
         }
 
-// Return the shiny new monad.
-
         return monad;
+
     }
-    unit.method = function (name, func) {
 
-// Add a method to the prototype.
-
-        prototype[name] = func;
-        return unit;
+    Monad.method = function (name, fn) {
+        prototype[name] = fn;
+        return Monad;
     };
-    unit.lift_value = function (name, func) {
 
-// Add a method to the prototype that calls bind with the func. This can be
-// used for ajax methods that return values other than monads.
-
+    Monad.val = function (name, fn) {
+        // This can be used for ajax methods that return values other than monads.
         prototype[name] = function () {
-            return this.bind(func, arguments);
+            return this.bind(fn, arguments);
         };
-        return unit;
+        return Monad;
     };
-    unit.lift = function (name, func) {
 
-// Add a method to the prototype that calls bind with the func. If the value
-// returned by the func is not a monad, then make a monad.
-
+    Monad.lift = function (name, fn) {
+        // If the value returned by the fn is not a monad, then make a monad.
         prototype[name] = function () {
-            var result = this.bind(func, arguments);
-            return result && result.is_monad === true ? result : unit(result);
+            var monad = this.bind(fn, arguments);
+            return monad && true === monad.monadic ? monad : Monad(monad);
         };
-        return unit;
+        return Monad;
     };
-    return unit;
-}
 
+    return Monad;
+
+};
